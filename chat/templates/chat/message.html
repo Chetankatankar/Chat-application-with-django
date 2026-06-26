@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Django Chat Application</title>
+  {% load static %}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+          integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+  <div class="parent">
+    <div class="child-2">
+      <center><h2>Django Channels Chat's</h2></center><hr>
+      <div class="chat-body-parent">
+        <div class="chat-body" id="tasks">
+          <div class="message" id="chatContainer">
+            <!-- existing messages from DB (wrapped for spacing) -->
+            {% for i in messages %}
+              {% if i.sender != user %}
+                <div class="receive-block">
+                  <div class="sender">{{ i.sender }}</div>
+                  <div class="receive">
+                    <p class="msg-text">{{ i.message }}</p>
+                    <p class="msg-time">{{ i.timestamp|date:"h:i A" }}</p>
+                  </div>
+                </div>
+              {% else %}
+                <div class="send-block">
+                  <div class="sender">You</div>
+                  <div class="send">
+                    <p class="msg-text">{{ i.message }}</p>
+                    <p class="msg-time">{{ i.timestamp|date:"h:i A" }}</p>
+                  </div>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <div class="form">
+            <form action="" id="message-form" method="POST">
+              {% csrf_token %}
+              <textarea id="msg" cols="30" name="message" rows="2" placeholder="Enter your message" required></textarea>
+              <button class="submit" type="submit">Send</button>
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+<script>
+(function() {
+  const ROOM_NAME = "{{ room_name|escapejs }}";
+  const CURRENT_USER = "{{ user|escapejs }}";
+
+  const msgInput = document.getElementById('msg');
+  const messageContainer = document.querySelector('.message');
+  const form = document.getElementById('message-form');
+
+  if (!ROOM_NAME) {
+    console.error("No room_name provided in template context.");
+    return;
+  }
+
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${wsScheme}://${window.location.host}/ws/chat/${encodeURIComponent(ROOM_NAME)}/`;
+  console.log("Opening WebSocket:", wsUrl);
+
+  // server starts connection from these 3 upr wale lines
+
+  const socket = new WebSocket(wsUrl);
+
+  socket.addEventListener('open', () => console.log("WebSocket opened"));
+  socket.addEventListener('error', (e) => console.error("WebSocket error:", e));
+  socket.addEventListener('close', (e) => console.warn("WebSocket closed:", e));
+
+  function escapeHtml(unsafe) {
+    if (unsafe === null || unsafe === undefined) return '';
+    return String(unsafe)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function scrollToBottom() {
+    if (!messageContainer) return;
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+  }
+
+  // time in local format (HH:MM AM/PM)
+  function formatTimeForNow() {
+    const now = new Date();
+    // optionally convert to IST if server/clients in different TZ
+    // const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const opts = { hour: '2-digit', minute: '2-digit' };
+    return now.toLocaleTimeString([], opts);
+  }
+
+  function buildMessageElement(sender, message, isCurrentUser) {
+    const wrapper = document.createElement('div');
+    wrapper.className = isCurrentUser ? 'send-block' : 'receive-block';
+
+    const senderDiv = document.createElement('div');
+    senderDiv.className = 'sender';
+    senderDiv.textContent = sender || '';
+
+    const bubble = document.createElement('div');
+    bubble.className = isCurrentUser ? 'send' : 'receive';
+
+    const pMessage = document.createElement('p');
+    pMessage.className = 'msg-text';
+    pMessage.innerHTML = escapeHtml(message);
+
+    const pTime = document.createElement('p');
+    pTime.className = 'msg-time';
+    pTime.textContent = formatTimeForNow();
+
+    bubble.appendChild(pMessage);
+    bubble.appendChild(pTime);
+
+    wrapper.appendChild(senderDiv);
+    wrapper.appendChild(bubble);
+
+    return wrapper;
+  }
+
+  socket.addEventListener('message', (event) => {
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch (err) {
+      console.error("Invalid JSON from server:", event.data);
+      return;
+    }
+
+    const sender = data.sender ?? null;
+    const message = data.message ?? '';
+
+    const el = buildMessageElement(sender, message, sender === CURRENT_USER);
+    if (messageContainer) messageContainer.appendChild(el);
+    scrollToBottom();
+
+    if (sender && sender === CURRENT_USER && msgInput) msgInput.value = '';
+  });
+
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const text = (msgInput ? msgInput.value : '').trim();
+      if (!text) return;
+
+      if (socket.readyState !== WebSocket.OPEN) {
+        alert("Socket not open. Check server and console.");
+        console.error("Socket readyState:", socket.readyState);
+        return;
+      }
+
+      socket.send(JSON.stringify({
+        message: text,
+        sender: CURRENT_USER
+      }));
+
+      // clear input immediately
+      if (msgInput) msgInput.value = '';
+      if (msgInput) msgInput.focus();
+    });
+  } else {
+    console.warn("message-form not found");
+  }
+})();
+</script>
+
+<style>
+* { padding: 0; margin: 0; box-sizing: border-box; }
+
+.parent {
+  background-color: #B1A296;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.child-2 {
+  width: 50%;
+  margin: 10px;
+  border-radius: 10px;
+  padding: 10px;
+  background-color: #FBEEC1;
+}
+
+/* main chat body with fixed height */
+.chat-body {
+  width: 100%;
+  background-color: #557A95;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
+
+/* message area — fixed height + scroll */
+.message {
+  background-color: transparent;
+  border-radius: 10px;
+  padding: 10px;
+  flex: 1;
+  max-height: 400px;      /* adjust as you like */
+  min-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* message blocks: sender name + bubble */
+.receive-block, .send-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;   
+  max-width: 100%;
+}
+
+/* sender label above bubble (small) */
+.sender {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 2px;
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #bda99a;
+  color: #000;
+  align-self: flex-start;
+  line-height: 1.2;
+}
+
+.send-block .sender {
+  align-self: flex-end;
+  background: #bda99a;
+}
+
+/* bubbles */
+.chat-body .message .receive, .chat-body .message .send {
+  background-color: #B1A296;
+  max-width: 400px;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+/* outgoing messages right, incoming left */
+.chat-body .message .send { align-self: flex-end; }
+.chat-body .message .receive { align-self: flex-start; }
+
+/* input form */
+form {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  margin-top: 10px;
+}
+
+form textarea {
+  width: 70%;
+  height: 40px;
+  border-radius: 10px;
+  padding: 10px;
+  resize: none;
+}
+
+form button {
+  width: 25%;
+  padding: 10px;
+  background-color: #FBEEC1;
+  border-radius: 5px;
+  border: none;
+  color: #000;
+}
+
+.sender-name { 
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 2px;
+  color: #222;
+}
+
+.msg-text {
+  font-size: 15px;
+  color: #000;
+}
+
+.msg-time {
+  font-size: 10px;
+  text-align: right;
+  color: #333;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+/* responsive */
+@media only screen and (max-width: 600px) {
+  .child-2 { width: 100%; }
+  .message { max-height: 400px; min-height: 400px; }
+}
+</style>
+</html>
