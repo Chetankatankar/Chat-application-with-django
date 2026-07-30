@@ -6,3 +6,4 @@ Also in most of the chat application's uses tools like websocket for live-long c
 beacuse we should not need to referesh when message arrives for that in this application i have used Websocket here.
 
 And due to Websocket our project become ASGI based except WSGI..
+we can chat here freely ahha.!
