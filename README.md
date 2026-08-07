@@ -9,4 +9,4 @@ And due to Websocket our project become ASGI based except WSGI..
 we can chat here freely ahha.!
 
 see this project is working as microservice in one my project list that is Indian Railway Bridge Management System Lucknow
-Yess it is playing very effective value in my project 
+Yess it is playing very effective value in my project.
